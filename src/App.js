@@ -1,170 +1,242 @@
-import * as React from 'react';
+import React from 'react';
+import axios from 'axios';
 
-const initialStories = [
-  {
-    title: 'React',
-    url: 'https://reactjs.org/',
-    author: 'Jordan Walke',
-    num_comments: 3,
-    points: 4,
-    objectID: 0,
-  },
-  {
-    title: 'Redux',
-    url: 'https://redux.js.org/',
-    author: 'Dan Abramov, Andrew Clark',
-    num_comments: 2,
-    points: 5,
-    objectID: 1,
-  },
-];
+import SearchForm from './SearchForm';
+import List from './List';
 
-const getAsyncStories = () =>
-  new Promise( (resolve, reject) => 
-    setTimeout(
-      () => resolve({ data: { stories : initialStories } }),
-      2000)
-     
-);
+// const API_ENDPOINT = 'https://hn.algolia.com/api/v1/search?query=';
+const API_BASE = 'https://hn.algolia.com/api/v1';
+const API_SEARCH = '/search';
+const PARAM_SEARCH = 'query=';
+const PARAM_PAGE = 'page='
+
+const getUrl = (searchTerm, page) => `${API_BASE}${API_SEARCH}?${PARAM_SEARCH}${searchTerm}&${PARAM_PAGE}${page}`;
 
 const useSemiPersistentState = (key, initialState) => {
-  const [value, setValue] = React.useState( 
+  const [value, setValue] = React.useState(
     localStorage.getItem(key) || initialState
   );
 
-  React.useEffect( () => {
+  React.useEffect(() => {
     localStorage.setItem(key, value);
   }, [value, key]);
 
   return [value, setValue];
-}
+};
 
 const storiesReducer = (state, action) => {
-  switch(action.type) {
-    case 'SET_STORIES':
-      return action.payload;
+  switch (action.type) {
+    case 'STORIES_FETCH_INIT':
+      return {
+        ...state,
+        isLoading: true,
+        isError: false,
+      };
+    case 'STORIES_PAGE_UPDATE':
+      return {
+        ...state,
+        isUpdating: true,
+        isError: false,
+      };
+    case 'STORIES_FETCH_SUCCESS':
+      return {
+        ...state,
+        isLoading: false,
+        isUpdating: false,
+        isError: false,
+        data: 
+          action.payload.page === 0 
+            ? action.payload.list 
+            : state.data.concat(action.payload.list),
+        page: action.payload.page,
+      };
+    case 'STORIES_FETCH_FAILURE':
+      return {
+        ...state,
+        isLoading: false,
+        isUpdating: false,
+        isError: true,
+      };
     case 'REMOVE_STORY':
-      return state.filter( 
-        story => action.payload.objectID !== story.objectID
-      );
+      return {
+        ...state,
+        data: state.data.filter(
+          story => action.payload.objectID !== story.objectID
+        ),
+      };
     default:
       throw new Error();
   }
-}
+};
+
+const extractSearchTerm = url => 
+  url.substring(url.lastIndexOf('?') + 1, url.lastIndexOf('&'))
+  .replace(PARAM_SEARCH, '');
+
+const extractPage = url => url.substring(url.lastIndexOf("page")).replace('page=', '');
+
+const getLastSearches = urls =>{
+  // const uniqueSearches = Array.from(new Set(urls));
+  // console.log('Unique Searches', uniqueSearches);
+  return urls
+  .reduce((result, url, index) => {
+    const searchTerm = extractSearchTerm(url);
+
+    if(index === 0) {
+      return result.concat(searchTerm)
+    }
+
+    const previousSearchTerm = result[result.length - 1];
+
+    if (searchTerm === previousSearchTerm) {
+      return result;
+    } else {
+      return result.concat(searchTerm);
+    }
+  }, [])
+  .slice(-6).slice(0, -1);
+} 
 
 const App = () => {
+  const [searchTerm, setSearchTerm] = useSemiPersistentState(
+    'search',
+    'React'
+  );
 
-  const [searchTerm, setSearchTerm] = useSemiPersistentState('search', 'React');
-  // const [stories, setStories] = React.useState([]);
+  const [urls, setUrls] = React.useState([
+    getUrl(searchTerm, 0),
+  ]);
+
   const [stories, dispatchStories] = React.useReducer(
-    storiesReducer, []
-  )
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [isError, setIsError] = React.useState(false);
+    storiesReducer,
+    { data: [], page: 0, isLoading: false, isError: false, isUpdating: false }
+  );
+
+  const handleFetchStories = React.useCallback(async (operation) => {
+    if (operation === 'initial_fetch') {
+      dispatchStories({ type: 'STORIES_FETCH_INIT' });
+    } else if( operation === 'updating_pages') {
+      dispatchStories({ type: 'STORIES_PAGE_UPDATE' });
+    }
+    // console.log(operation);
+
+    try {
+      const lastUrl = urls[urls.length - 1]
+      const result = await axios.get(lastUrl);
+      console.log(result);
+
+      dispatchStories({
+        type: 'STORIES_FETCH_SUCCESS',
+        payload:{
+          list: result.data.hits,
+          page: result.data.page,
+        } 
+      });
+    } catch {
+      dispatchStories({ type: 'STORIES_FETCH_FAILURE' });
+    }
+  }, [urls]);
 
   React.useEffect(() => {
-    setIsLoading(true);
-
-    getAsyncStories().then( (result) => {
-      dispatchStories({
-        type: 'SET_STORIES',
-        payload: result.data.stories,
-      });
-      setIsLoading(false);
-    }).catch(() => setIsError(true));
-  }, [])
+    const page = extractPage(urls[urls.length - 1]);
+    console.log('Page', page);
+    if (Number(page)) {
+      console.log('Updating');
+      handleFetchStories('updating_pages');
+    } else {
+      handleFetchStories('initial_fetch');
+    }
+  }, [handleFetchStories]);
 
   const handleRemoveStory = item => {
     dispatchStories({
       type: 'REMOVE_STORY',
       payload: item,
     });
-  }
-  // const searchTermState = React.useState('')
-  // const searchTerm = searchTermState[0];
-  // const setSearchTerm = searchTermState[1];  
-  const handleSearch = event => {
-    setSearchTerm(event.target.value)
-  }
+  };
 
-  const searchedStories = stories.filter(story => 
-    story.title.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const handleSearchInput = event => {
+    setSearchTerm(event.target.value);
+  };
+
+  const handleSearchSubmit = event => {
+    handleSearch(searchTerm, 0);
+
+    event.preventDefault();
+  };
+
+  const handleLastSearch = searchTerm => {
+    setSearchTerm(searchTerm);
+    handleSearch(searchTerm, 0);
+  };
+
+  const handleSearch = (searchTerm, page) => {
+    const url = getUrl(searchTerm, page);
+    setUrls([...urls, url]);
+  };
+
+  const handleMore = () => {
+    const lastUrl = urls[urls.length - 1];
+    const searchTerm = extractSearchTerm(lastUrl);
+    handleSearch(searchTerm, stories.page + 1);
+  };
+
+  const lastSearches = getLastSearches(urls);
+  console.log(lastSearches);
 
   return (
-    <div>
+    <div className="app">
       <h1>My Hacker Stories</h1>
 
-      <InputWithLabel 
-        id="search"  
-        type='text' 
-        value={searchTerm}
-        onInputChange={handleSearch} 
-        isFocused
-      >
-        <strong>Search</strong>
-      </InputWithLabel >
-      <p>Search for <strong>{searchTerm}</strong></p>
+      <SearchForm
+        searchTerm={searchTerm}
+        onSearchInput={handleSearchInput}
+        onSearchSubmit={handleSearchSubmit}
+      />
 
-      <hr />
+      {lastSearches.length !== 0 && (
+      <LastSearches 
+        lastSearches={lastSearches}
+        onLastSearch={handleLastSearch}
+      />)}
 
-      {isError && <p>Something went wrong ...</p>}
+      {stories.isError && <p>Something went wrong ...</p>}
 
-      {isLoading ? (
-        <p>Loading ...</p>
-      ): (
-        <List list={searchedStories} onRemoveItem={handleRemoveStory}/>
+      {stories.isLoading  ? (
+        <Loader />
+      ) : (
+        <List list={stories.data} onRemoveItem={handleRemoveStory} />
+      )}
+      
+      {stories.isUpdating ? (
+        <Loader />
+      ) : (
+        <button type="button" onClick={handleMore} className="button--main centered">
+          More Stories
+        </button>
       )}
     </div>
   );
-}
+};
 
-const List = ({ list, onRemoveItem }) => (
-    <ul>{
-      list.map( ( item ) => ( 
-      <Item 
-        key={item.objectID} 
-        item={item}
-        onRemoveItem={onRemoveItem} 
-      />)
-      )}
-    </ul>
-  );
 
-const Item = ({ item, onRemoveItem }) => (
-  <li>
-    <span>
-      <a href={item.url}>{item.title}</a>
-    </span>
-    <span>{item.author}</span>
-    <span>{item.num_comments}</span>
-    <span>{item.points}</span>
-    <button type="button" onClick={() => onRemoveItem(item)}>Dismiss</button>
-  </li>
+const LastSearches  = ({ lastSearches, onLastSearch}) => (
+  <div className="history">
+        {lastSearches.map((searchTerm, index) => (
+          <button
+            type="button"
+            key={searchTerm + index}
+            onClick={() => { 
+              console.log("CLICKED")
+              onLastSearch(searchTerm)}
+            }
+          >
+            {searchTerm}
+          </button>
+        ))}
+      </div>
 );
 
-const InputWithLabel = ({id, value,type="text", onInputChange, children, isFocused}) => {
-  const inputRef = React.useRef();
-
-  React.useEffect( () => {
-    if (isFocused && inputRef.current) {
-      inputRef.current.focus()
-    }
-  }, [isFocused])
-  return (
-  <>
-    <label htmlFor={id}>{children}:</label>
-    &nbsp;
-    <input 
-      type={type} 
-      id={id} onChange={onInputChange} 
-      value={value} 
-      // autoFocus={isFocused}
-      ref={inputRef}
-    />
-  </>  
-  );
-}
-
+const Loader = () => <p className='centered'>Loading ...</p>;
 
 export default App;
