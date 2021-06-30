@@ -3,6 +3,7 @@ import axios from 'axios';
 
 import SearchForm from './SearchForm';
 import List from './List';
+import { useInfiniteScroll } from './customhooks';
 
 // const API_ENDPOINT = 'https://hn.algolia.com/api/v1/search?query=';
 const API_BASE = 'https://hn.algolia.com/api/v1';
@@ -121,7 +122,7 @@ const App = () => {
     // console.log(operation);
 
     try {
-      const lastUrl = urls[urls.length - 1]
+      const lastUrl = urls[urls.length - 1];
       const result = await axios.get(lastUrl);
       console.log(result);
 
@@ -181,6 +182,9 @@ const App = () => {
     handleSearch(searchTerm, stories.page + 1);
   };
 
+  const scrollRef = React.useRef(null);
+  useInfiniteScroll(scrollRef, handleMore);
+
   const lastSearches = getLastSearches(urls);
   console.log(lastSearches);
 
@@ -208,13 +212,9 @@ const App = () => {
         <List list={stories.data} onRemoveItem={handleRemoveStory} />
       )}
       
-      {stories.isUpdating ? (
+      {stories.isUpdating && stories.data.length ? (
         <Loader />
-      ) : (
-        <button type="button" onClick={handleMore} className="button--main centered">
-          More Stories
-        </button>
-      )}
+      ) : ( <div ref={scrollRef}>FETCH</div>  )}
     </div>
   );
 };
