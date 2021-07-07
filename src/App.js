@@ -3,7 +3,7 @@ import axios from 'axios';
 
 import SearchForm from './SearchForm';
 import List from './List';
-import { useInfiniteScroll } from './customhooks';
+// import { useInfiniteScroll } from './customhooks';
 
 // const API_ENDPOINT = 'https://hn.algolia.com/api/v1/search?query=';
 const API_BASE = 'https://hn.algolia.com/api/v1';
@@ -45,10 +45,11 @@ const storiesReducer = (state, action) => {
         isLoading: false,
         isUpdating: false,
         isError: false,
-        data: 
-          action.payload.page === 0 
-            ? action.payload.list 
-            : state.data.concat(action.payload.list),
+        data: action.payload.list,
+        // data: 
+        //   action.payload.page === 0 
+        //     ? action.payload.list 
+        //     : state.data.concat(action.payload.list),
         page: action.payload.page,
       };
     case 'STORIES_FETCH_FAILURE':
@@ -147,7 +148,7 @@ const App = () => {
     } else {
       handleFetchStories('initial_fetch');
     }
-  }, [handleFetchStories]);
+  }, [handleFetchStories, urls]);
 
   const handleRemoveStory = item => {
     dispatchStories({
@@ -176,14 +177,14 @@ const App = () => {
     setUrls([...urls, url]);
   };
 
-  const handleMore = () => {
+  const handleMore = (page) => {
     const lastUrl = urls[urls.length - 1];
     const searchTerm = extractSearchTerm(lastUrl);
-    handleSearch(searchTerm, stories.page + 1);
+    handleSearch(searchTerm, page);
   };
 
-  const scrollRef = React.useRef(null);
-  useInfiniteScroll(scrollRef, handleMore);
+  // const scrollRef = React.useRef(null);
+  // useInfiniteScroll(scrollRef, handleMore);
 
   const lastSearches = getLastSearches(urls);
   console.log(lastSearches);
@@ -212,9 +213,10 @@ const App = () => {
         <List list={stories.data} onRemoveItem={handleRemoveStory} />
       )}
       
-      {stories.isUpdating && stories.data.length ? (
+      {/* {stories.isUpdating && stories.data.length ? (
         <Loader />
-      ) : ( <div ref={scrollRef}>FETCH</div>  )}
+      ) : ( <div ref={scrollRef}>FETCH</div>  )} */}
+      <Pagination page={stories.page} totalPages={10} handleFetchMore={handleMore}/>
     </div>
   );
 };
@@ -238,5 +240,27 @@ const LastSearches  = ({ lastSearches, onLastSearch}) => (
 );
 
 const Loader = () => <p className='centered'>Loading ...</p>;
+
+const Pagination = ({page, totalPages, handleFetchMore}) => {
+  console.log(typeof page);
+  console.log(page);
+  var start = 1 + (Math.floor(page/5) * 5);
+  var finish =  (start + 4) > totalPages ? totalPages : start + 4;
+  let array = Array(finish + 1 - start).fill().map((_, idx) => start+idx);
+  console.log(array);
+  return (
+    <div className='paginator centered'>
+      {array.map((value) => (
+        <button 
+          key={value} 
+          className={`${value===page+1? 'active-page ' : ''}paginator__item`}
+          onClick={() => { handleFetchMore(value-1)}}
+        >
+          {value}
+        </button> )
+      )}
+    </div>
+  );
+};
 
 export default App;

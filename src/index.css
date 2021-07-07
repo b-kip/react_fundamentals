@@ -334,3 +334,33 @@ h1 {
   display: flex;
   gap: 1rem;
 }
+
+.paginator {
+  color: gray;
+  font-weight: 600;
+  display: flex;
+  gap: 3px;
+}
+
+.paginator__item {
+  /* border: 1px solid #000000; */
+  padding: 0;
+  display: flex;
+  /* align-items: center; */
+  justify-content: center;
+  height: 25px;
+  width: 25px;
+  border-radius: 50%;
+  text-align: center;
+  background: none;
+  /* box-shadow: 1px 1px 3px rgba(255, 255, 255, 0.3); */
+}
+
+.active-page {
+  background-color: black;
+  color: white;
+}
+
+.paginator > * + * {
+  /* border-left: none; */
+}
