@@ -146,7 +146,7 @@ const App = () => {
     } else {
       handleFetchStories('initial_fetch');
     }
-  }, [handleFetchStories]);
+  }, [handleFetchStories, urls]);
 
   const handleRemoveStory = item => {
     dispatchStories({
